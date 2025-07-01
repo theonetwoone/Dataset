@@ -2,4 +2,11 @@ streamlit
 pillow
 pandas
 requests
-openai
+openai>=1.0.0
+google-generativeai
+numpy
+opencv-python-headless
+scikit-learn
+matplotlib
+seaborn
+plotly
