@@ -768,106 +768,106 @@ if uploaded_files:
                 st.info(f"⏱️ Estimated processing time: ~{estimated_time:.0f} seconds ({delay_between_calls}s per image)")
             
             start_time = time.time()
-        
-        for idx, uploaded_file in enumerate(uploaded_files):
-            file_ext = Path(uploaded_file.name).suffix.lower()
-            if file_ext not in ALLOWED_EXTENSIONS:
-                continue
             
-            # Update progress
-            progress = (idx + 1) / len(uploaded_files)
-            progress_bar.progress(progress)
+            for idx, uploaded_file in enumerate(uploaded_files):
+                file_ext = Path(uploaded_file.name).suffix.lower()
+                if file_ext not in ALLOWED_EXTENSIONS:
+                    continue
+                
+                # Update progress
+                progress = (idx + 1) / len(uploaded_files)
+                progress_bar.progress(progress)
+                
+                elapsed_time = time.time() - start_time
+                remaining_files = len(uploaded_files) - (idx + 1)
+                
+                if enable_rate_limiting and idx > 0:
+                    avg_time_per_file = elapsed_time / (idx + 1)
+                    eta = remaining_files * avg_time_per_file
+                    status_text.text(f"Processing {idx + 1}/{len(uploaded_files)}: {uploaded_file.name} (ETA: {eta:.0f}s)")
+                else:
+                    status_text.text(f"Processing {idx + 1}/{len(uploaded_files)}: {uploaded_file.name}")
+                
+                new_basename = f"{concept_token.lower()}_{idx:04d}"
+                image_path = output_dir / f"{new_basename}.jpg"
+                text_path = output_dir / f"{new_basename}.txt"
+                
+                try:
+                    # Process image
+                    img = Image.open(uploaded_file).convert("RGB")
+                    img = resize_image_preserve_aspect(img, MAX_DIMENSION)
+                    img.save(image_path, format="JPEG", quality=95)
+                    
+                    # Generate caption
+                    with open(image_path, "rb") as f:
+                        image_bytes = f.read()
+                    
+                    # Create dynamic system prompt with concept info
+                    current_system_prompt = create_system_prompt(concept_info)
+                    
+                    # Add rate limiting delay (except for first image)
+                    if idx > 0 and enable_rate_limiting and delay_between_calls > 0:
+                        time.sleep(delay_between_calls)
+                    
+                    # API call with retry logic
+                    def make_api_call():
+                        if vision_model == "Gemini Flash 1.5":
+                            return query_gemini(api_key, image_bytes, current_system_prompt, "gemini-1.5-flash")
+                        elif vision_model == "Gemini Pro Vision":
+                            return query_gemini(api_key, image_bytes, current_system_prompt, "gemini-pro-vision")
+                        elif vision_model == "OpenAI GPT-4 Vision":
+                            return query_openai(api_key, image_bytes, current_system_prompt)
+                        elif vision_model == "HuggingFace Multi-Model":
+                            return query_huggingface(api_key, image_bytes, current_system_prompt)
+                        else:
+                            raise ValueError("Invalid model selected")
+                    
+                    description = retry_api_call(make_api_call, max_retries=max_retries, status_placeholder=retry_status)
+                    
+                    # Clear retry status after successful call
+                    retry_status.empty()
+                    
+                    # Format caption based on mode
+                    if mode == "Subject (Concept)":
+                        caption = f"{concept_token}, {description}"
+                    else:  # Style mode
+                        caption = f"{concept_token} style, {description}"
+                    
+                    # Save caption
+                    with open(text_path, "w", encoding="utf-8") as f:
+                        f.write(caption)
+                    
+                    results.append({
+                        "Image": image_path.name,
+                        "Caption": caption,
+                        "Original": uploaded_file.name
+                    })
+                    
+                except UnidentifiedImageError:
+                    retry_status.empty()  # Clear retry status on error
+                    st.warning(f"Skipped unreadable file: {uploaded_file.name}")
+                except Exception as e:
+                    retry_status.empty()  # Clear retry status on error
+                    st.error(f"Error processing {uploaded_file.name}: {str(e)}")
             
-            elapsed_time = time.time() - start_time
-            remaining_files = len(uploaded_files) - (idx + 1)
+            progress_bar.empty()
+            status_text.empty()
+            retry_status.empty()  # Clear retry status when done
             
-            if enable_rate_limiting and idx > 0:
-                avg_time_per_file = elapsed_time / (idx + 1)
-                eta = remaining_files * avg_time_per_file
-                status_text.text(f"Processing {idx + 1}/{len(uploaded_files)}: {uploaded_file.name} (ETA: {eta:.0f}s)")
-            else:
-                status_text.text(f"Processing {idx + 1}/{len(uploaded_files)}: {uploaded_file.name}")
-            
-            new_basename = f"{concept_token.lower()}_{idx:04d}"
-            image_path = output_dir / f"{new_basename}.jpg"
-            text_path = output_dir / f"{new_basename}.txt"
-            
-            try:
-                # Process image
-                img = Image.open(uploaded_file).convert("RGB")
-                img = resize_image_preserve_aspect(img, MAX_DIMENSION)
-                img.save(image_path, format="JPEG", quality=95)
+            if results:
+                # Store results in session state with configuration tracking
+                st.session_state.last_results = results
+                st.session_state.last_output_dir = str(output_dir)
+                st.session_state.last_concept_token = concept_token
+                st.session_state.last_config_key = current_config_key
                 
-                # Generate caption
-                with open(image_path, "rb") as f:
-                    image_bytes = f.read()
+                # Show results
+                df = pd.DataFrame(results)
+                st.success(f"Successfully processed {len(results)} images!")
                 
-                # Create dynamic system prompt with concept info
-                current_system_prompt = create_system_prompt(concept_info)
-                
-                # Add rate limiting delay (except for first image)
-                if idx > 0 and enable_rate_limiting and delay_between_calls > 0:
-                    time.sleep(delay_between_calls)
-                
-                # API call with retry logic
-                def make_api_call():
-                    if vision_model == "Gemini Flash 1.5":
-                        return query_gemini(api_key, image_bytes, current_system_prompt, "gemini-1.5-flash")
-                    elif vision_model == "Gemini Pro Vision":
-                        return query_gemini(api_key, image_bytes, current_system_prompt, "gemini-pro-vision")
-                    elif vision_model == "OpenAI GPT-4 Vision":
-                        return query_openai(api_key, image_bytes, current_system_prompt)
-                    elif vision_model == "HuggingFace Multi-Model":
-                        return query_huggingface(api_key, image_bytes, current_system_prompt)
-                    else:
-                        raise ValueError("Invalid model selected")
-                
-                description = retry_api_call(make_api_call, max_retries=max_retries, status_placeholder=retry_status)
-                
-                # Clear retry status after successful call
-                retry_status.empty()
-                
-                # Format caption based on mode
-                if mode == "Subject (Concept)":
-                    caption = f"{concept_token}, {description}"
-                else:  # Style mode
-                    caption = f"{concept_token} style, {description}"
-                
-                # Save caption
-                with open(text_path, "w", encoding="utf-8") as f:
-                    f.write(caption)
-                
-                results.append({
-                    "Image": image_path.name,
-                    "Caption": caption,
-                    "Original": uploaded_file.name
-                })
-                
-            except UnidentifiedImageError:
-                retry_status.empty()  # Clear retry status on error
-                st.warning(f"Skipped unreadable file: {uploaded_file.name}")
-            except Exception as e:
-                retry_status.empty()  # Clear retry status on error
-                st.error(f"Error processing {uploaded_file.name}: {str(e)}")
-        
-        progress_bar.empty()
-        status_text.empty()
-        retry_status.empty()  # Clear retry status when done
-        
-        if results:
-            # Store results in session state with configuration tracking
-            st.session_state.last_results = results
-            st.session_state.last_output_dir = str(output_dir)
-            st.session_state.last_concept_token = concept_token
-            st.session_state.last_config_key = current_config_key
-            
-            # Show results
-            df = pd.DataFrame(results)
-            st.success(f"Successfully processed {len(results)} images!")
-            
-            # Display results table
-            st.subheader("Generated Captions")
-            st.dataframe(df, use_container_width=True)
+                # Display results table
+                st.subheader("Generated Captions")
+                st.dataframe(df, use_container_width=True)
 
     elif 'last_results' in st.session_state:
         # Show existing results without reprocessing
