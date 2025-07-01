@@ -21,7 +21,7 @@ st.title("Flux LoRA Dataset Builder with Vision API Selection")
 
 concept_token = st.text_input("Concept Token (e.g. CSKULL or GXSTYLE)", "CSKULL")
 mode = st.selectbox("Mode", ["Subject (Concept)", "Style"])
-vision_model = st.radio("Choose Vision Model API", ["Gemini Flash (v2.5)", "Gemini Pro Vision", "OpenAI GPT-4 Vision", "HuggingFace Inference"])", "Gemini Pro Vision", "OpenAI GPT-4 Vision", "HuggingFace Inference"])
+vision_model = st.radio("Choose Vision Model API", ["Gemini Flash (v2.5)", "Gemini Pro Vision", "OpenAI GPT-4 Vision", "HuggingFace Inference", "Gemini Pro Vision", "OpenAI GPT-4 Vision", "HuggingFace Inference"])
 uploaded_files = st.file_uploader("Upload Images", accept_multiple_files=True, type=ALLOWED_EXTENSIONS)
 api_key = st.text_input("API Key (or Bearer Token)", type="password")
 
