@@ -46,7 +46,7 @@ def query_gemini(api_key, image_bytes, system_prompt):
         ]
     }
     response = requests.post(
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro-vision:generateContent",
         headers=headers,
         json=data
     )
